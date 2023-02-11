@@ -10,8 +10,6 @@ from tensorflow.keras.utils import to_categorical
 def func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, batch_size, num_classes, sensor_sizes, dep, xvals, yvals, reduction):
 
   from numpy.linalg import norm
-  import keras
-  from keras.layers import Activation, Dense
   import numpy as np
   import pandas as pd
   import tensorflow as tf
@@ -138,7 +136,8 @@ def dep_cor(rsq_mat,sensor,m,n):
 
 #%%
 #IRIS-1
-iris=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/datasets/Iris.csv')
+#iris=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/datasets/Iris.csv')
+iris=pd.read_csv('C:/Users/CILAB2/Downloads/ayti-datasets/iris.csv')
 xvals = iris[['SepalLengthCm','SepalWidthCm','PetalLengthCm','PetalWidthCm']].astype(np.float32)
 yvals = iris['Species']
 yvals=to_categorical(np.asarray(yvals.factorize()[0]))
@@ -225,25 +224,30 @@ writer.save()
 #%%
 #Gas-sensor
 
-data=pd.read_csv('//Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/GasSensor(cleaned in R).csv',header=None)
-data.drop(0,axis=1,inplace=True)
+#data=pd.read_csv('//Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/GasSensor(cleaned in R).csv',header=None)
+data=pd.read_csv('C:/Users/CILAB2/Downloads/ayti-datasets/GasSensor(cleaned in R).csv')
+data.drop('Unnamed: 0',axis=1,inplace=True)
 data.drop(0,axis=0,inplace=True)
 data.dropna() 
-data[1]=data[1].replace(['1'],1)
-data[1]=data[1].replace(['2'],2)
-data[1]=data[1].replace(['3'],3)
-data[1]=data[1].replace(['4'],4)
-data[1]=data[1].replace(['5'],5)
-data[1]=data[1].replace(['6'],6)
+data["V1"]=data["V1"].replace(['1'],1)
+data["V1"]=data["V1"].replace(['2'],2)
+data["V1"]=data["V1"].replace(['3'],3)
+data["V1"]=data["V1"].replace(['4'],4)
+data["V1"]=data["V1"].replace(['5'],5)
+data["V1"]=data["V1"].replace(['6'],6)
 
-yvals=data[1]
+yvals=data["V1"]
+
 yvals=to_categorical(np.asarray(yvals.factorize()[0]))
 
 xvals=data.iloc[:,1:129].astype(np.float32)
 from scipy.stats import zscore
 for i in range(128):
-  xvals[i+2]=zscore(xvals[i+2])
-xvals
+  xvals.iloc[:,i]=zscore(xvals.iloc[:,i])
+
+
+from sklearn.neural_network import MLPClassifier
+from sklearn.model_selection import GridSearchCV
 from itertools import repeat
 # Define the parameter grid for the number of nodes in the hidden layer
 param_grid = {'hidden_layer_sizes': np.arange(2, 21, 2)}
@@ -263,21 +267,21 @@ print("Best number of nodes in hidden layer: ", grid_search.best_params_)
 result=[]
 for i in [0,2,5]:
   for j in [0,2,5]:
-    x=func_modified(i,j,19,500,100,6,list(repeat(8,16)),dep_cor,xvals,yvals,True)
+    x=func_modified(i,j,grid_search.best_params_['hidden_layer_sizes'],500,100,6,list(repeat(8,16)),dep_cor,xvals,yvals,True)
     result.append([i,j,x[0],x[1],x[2]])
-
-result_gs=pd.DataFrame(result)
-result_gs.columns =["Lambda","Mu", "Test Accuracy", "Number of sensors selected","Selected sensors"]
-writer = pd.ExcelWriter('output_1_gs.xlsx')
-# write dataframe to excel
-result_gs.to_excel(writer)
-# save the excel
-writer.save()
+    result_gs=pd.DataFrame(result)
+    #result_gs.columns =["Lambda","Mu", "Test Accuracy", "Number of sensors selected","Selected sensors"]
+    writer = pd.ExcelWriter('output_1_gs.xlsx')
+    # write dataframe to excel
+    result_gs.to_excel(writer)
+    # save the excel
+    writer.save()
 
 #%%
 #RSData-1
 
-rs=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/rs_8cl.csv')
+#rs=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/rs_8cl.csv')
+rs=pd.read_csv('C:/Users/CILAB2/Downloads/ayti-datasets/sensor-selection-datasets/rs_8cl.csv')
 xvals = rs.iloc[:,1:8]
 yvals = rs.iloc[:,8]
 yvals=to_categorical(np.asarray(yvals.factorize()[0]))
