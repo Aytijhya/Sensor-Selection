@@ -115,8 +115,10 @@ def func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, ba
     for i in range(10):
      x=func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, batch_size, num_classes, sensor_sizes_red,dep_cor,xvals_reduced,yvals,reduction=False)
      acc=acc+x[0]
+    s.close()
     return([acc/10,len(sensor_sizes_red),v])
   else:
+    s.close()
     return([testacc,len(sensor_sizes)])
 
 
@@ -267,7 +269,7 @@ print("Best number of nodes in hidden layer: ", grid_search.best_params_)
 result=[]
 for i in [0,2,5]:
   for j in [0,2,5]:
-    x=func_modified(i,j,grid_search.best_params_['hidden_layer_sizes'],500,100,6,list(repeat(8,16)),dep_cor,xvals,yvals,True)
+    x=func_modified(i,j,6,500,100,grid_search.best_params_['hidden_layer_sizes'],list(repeat(8,16)),dep_cor,xvals,yvals,True)
     result.append([i,j,x[0],x[1],x[2]])
     result_gs=pd.DataFrame(result)
     #result_gs.columns =["Lambda","Mu", "Test Accuracy", "Number of sensors selected","Selected sensors"]
@@ -364,5 +366,7 @@ result_rsdata2.to_excel(writer)
 writer.save()
 
 #%%
-#RSData-2
+#lrs
+
+
 
