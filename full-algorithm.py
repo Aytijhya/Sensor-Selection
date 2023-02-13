@@ -87,6 +87,10 @@ def func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, ba
                                                          input_y: yvals_train}))
     training_loss.append(s.run(loss, {input_X: xvals_train, 
                                       input_y: yvals_train}))
+    print("Epoch:{0}, Train loss: {1:.2f} Train acc: {2:.3f}".format(epoch,
+                                                                    training_loss[epoch],
+                                                                    training_accuracy[epoch]
+                                                                   ))
     
   
   y_pred = np.rint(s.run(predicted_y, feed_dict={input_X: xvals_test}))
@@ -280,12 +284,13 @@ for i in [0,2,5]:
 #%%
 #RSData-1
 
-#rs=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/rs_8cl.csv')
-rs=pd.read_csv('C:/Users/CILAB2/Downloads/ayti-datasets/sensor-selection-datasets/rs_8cl.csv')
+rs=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/rs_8cl.csv')
+#rs=pd.read_csv('C:/Users/CILAB2/Downloads/ayti-datasets/sensor-selection-datasets/rs_8cl.csv')
 xvals = rs.iloc[:,1:8]
 yvals = rs.iloc[:,8]
 yvals=to_categorical(np.asarray(yvals.factorize()[0]))
 
+from itertools import repeat
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import GridSearchCV
 
@@ -307,7 +312,7 @@ print("Best number of nodes in hidden layer: ", grid_search.best_params_)
 result=[]
 for i in [0,2,5]:
   for j in [0,2,5]:
-    x=func_modified(i,j,grid_search.best_params_['hidden_layer_sizes'],400,100,3,list(repeat(1,7)),dep_cor,xvals,yvals,True)
+    x=func_modified(i,j,grid_search.best_params_['hidden_layer_sizes'],400,100,8,list(repeat(1,7)),dep_cor,xvals,yvals,True)
     result.append([i,j,x[0],x[1],x[2]])
 
 result_rsdata1=pd.DataFrame(result)
@@ -364,5 +369,45 @@ result_rsdata2.to_excel(writer)
 writer.save()
 
 #%%
-#RSData-2
+#LRS
+lrs=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/lrs_cleaned.csv')
+lrs.drop('Unnamed: 0',axis=1,inplace=True)
+xvals = lrs.iloc[:,10:103]
+yvals = lrs.iloc[:,1]
+yvals=(yvals-yvals % 10)/10
+yvals=to_categorical(np.asarray(yvals.factorize()[0]))
+from scipy.stats import zscore
+for i in range(93):
+  xvals.iloc[:,i]=zscore(xvals.iloc[:,i])
 
+from sklearn.neural_network import MLPClassifier
+from sklearn.model_selection import GridSearchCV
+
+# Define the parameter grid for the number of nodes in the hidden layer
+param_grid = {'hidden_layer_sizes': np.arange(2, 21, 2)}
+
+# Create a MLPClassifier object
+mlp = MLPClassifier(max_iter=1000)
+
+# Create a GridSearchCV object
+grid_search = GridSearchCV(mlp, param_grid, cv=10, scoring='accuracy',verbose = 3)
+
+# Fit the GridSearchCV object to the data
+grid_search.fit(xvals, yvals)
+
+# Print the best number of nodes in the hidden layer
+print("Best number of nodes in hidden layer: ", grid_search.best_params_)
+
+result=[]
+for i in [0,2,5]:
+  for j in [0,2,5]:
+    x=func_modified(i,j,grid_search.best_params_['hidden_layer_sizes'],500,10,10,[44,49],dep_cor,xvals,yvals,True)
+    result.append([i,j,x[0],x[1],x[2]])
+
+result_lrsdata=pd.DataFrame(result)
+result_lrsdata.columns =["Lambda","Mu", "Test Accuracy", "Number of sensors selected","Selected sensors"]
+writer = pd.ExcelWriter('output_1_lrsdata.xlsx')
+# write dataframe to excel
+result_lrsdata.to_excel(writer)
+# save the excel
+writer.save()
