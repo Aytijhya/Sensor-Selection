@@ -5,7 +5,26 @@ import tensorflow as tf
 from tensorflow.keras.utils import to_categorical
 
 #%%
-def func_modified_test_train(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, batch_size, num_classes, sensor_sizes, dep, xvals_test, yvals_test,xvals_train, yvals_train, reduction):
+
+
+
+#%%
+#function for dependency between m th and n th sensor
+
+def dep_cor(rsq_mat,sensor,m,n):
+  
+  series = pd.Series(sensor)
+  cumsum = list(series.cumsum())
+  cumsum=[0]+cumsum
+  ind1=list(range(cumsum[m-1],cumsum[m]))
+  ind2=list(range(cumsum[n-1],cumsum[n]))
+  print(ind1)
+  cor=rsq_mat.iloc[ind1,ind2]
+  return(min(cor.apply(max,1)))
+
+
+#%%
+def func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, batch_size, num_classes, sensor_sizes, dep, xvals_train, yvals_train,xvals_test, yvals_test, reduction):
 
   from numpy.linalg import norm
   import numpy as np
@@ -15,6 +34,9 @@ def func_modified_test_train(regularizer_rate_0,regularizer_rate_1,num_layers_0,
   from tensorflow.keras.layers import Dense, Activation
   import tensorflow.compat.v1 as tf
   tf.disable_v2_behavior()
+  from sklearn.model_selection import train_test_split
+
+  #xvals_train, xvals_test,yvals_train, yvals_test = train_test_split(xvals,yvals,random_state=None, test_size=0.2,  shuffle=True)
                                                                      
   starter_learning_rate = 0.001
   num_features=sum(sensor_sizes)
@@ -44,7 +66,6 @@ def func_modified_test_train(regularizer_rate_0,regularizer_rate_1,num_layers_0,
 
   cumsum =[0]+ list(series.cumsum())
   redund=0
-  xvals_train=pd.DataFrame(xvals_train)
   r_mat=np.array(xvals_train.corr())
   rsq_mat=[[elem*elem for elem in inner] for inner in r_mat]
   rsq_mat=pd.DataFrame(rsq_mat)
@@ -83,8 +104,13 @@ def func_modified_test_train(regularizer_rate_0,regularizer_rate_1,num_layers_0,
                                                          input_y: yvals_train}))
     training_loss.append(s.run(loss, {input_X: xvals_train, 
                                       input_y: yvals_train}))
+    print("Epoch:{0}, Train loss: {1:.2f} Train acc: {2:.3f}".format(epoch,
+                                                                    training_loss[epoch],
+                                                                    training_accuracy[epoch]
+                                                                   ))
     
   
+    
   y_pred = np.rint(s.run(predicted_y, feed_dict={input_X: xvals_test}))
 
   testacc = accuracy_score(yvals_test, y_pred)
@@ -102,47 +128,42 @@ def func_modified_test_train(regularizer_rate_0,regularizer_rate_1,num_layers_0,
     v=[i for i,x in enumerate(w) if x > 0.1*max(w)]
     selected=[]
     for i in v:
-      selected.append(xvals_test.iloc[:,range(cumsum[i],cumsum[i+1])])
       selected.append(xvals_train.iloc[:,range(cumsum[i],cumsum[i+1])])
     
-    xvals_train_reduced=pd.concat(selected,ignore_index=True, axis=1)
-    xvals_test_reduced=pd.concat(selected,ignore_index=True, axis=1)
+    xvals_train_red=pd.concat(selected,ignore_index=True, axis=1)
     
+    selected=[]
+    for i in v:
+      selected.append(xvals_test.iloc[:,range(cumsum[i],cumsum[i+1])])
+    
+    xvals_test_red=pd.concat(selected,ignore_index=True, axis=1)
+    
+  
     acc=0
+    c=0
     sensor_sizes_red=[sensor_sizes[i] for i in v]
     for i in range(10):
-     x=func_modified_test_train(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, batch_size, num_classes, sensor_sizes_red,dep_cor,xvals_train_reduced,xvals_test_reduced,yvals_train,yvals_test,reduction=False)
-     acc=acc+x[0]
-    return([acc/10,len(sensor_sizes_red),v])
+     x=func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, batch_size, num_classes, sensor_sizes_red,dep_cor,xvals_train_red, yvals_train,xvals_test_red, yvals_test,reduction=False)
+     if x[0] > 0.4:
+         acc=acc+x[0]
+         c=c+1
+    s.close()
+    return([acc/c,len(sensor_sizes_red),v])
   else:
+    s.close()
     return([testacc,len(sensor_sizes)])
 
 
 
 #%%
-#function for dependency between m th and n th sensor
-
-def dep_cor(rsq_mat,sensor,m,n):
-  
-  series = pd.Series(sensor)
-  cumsum = list(series.cumsum())
-  cumsum=[0]+cumsum
-  ind1=list(range(cumsum[m-1],cumsum[m]))
-  ind2=list(range(cumsum[n-1],cumsum[n]))
-  print(ind1)
-  cor=rsq_mat.iloc[ind1,ind2]
-  return(min(cor.apply(max,1)))
-
-
-#%%
-data_trn=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/Landsat_trn.csv')
-data_tst=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/Landsat_tst.csv')
+data_trn=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/Landsat_trn_modified.csv')
+data_tst=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/Landsat_tst_modified.csv')
 data_trn.drop('Unnamed: 0',axis=1,inplace=True)
 data_tst.drop('Unnamed: 0',axis=1,inplace=True)
-xvals_train=data_trn.iloc[:,0:36]
-xvals_test=data_tst.iloc[:,0:36]
-yvals_test=data_tst.iloc[:,36]
-yvals_train=data_trn.iloc[:,36]
+xvals_train=data_trn.iloc[:,0:44]
+xvals_test=data_tst.iloc[:,0:44]
+yvals_test=data_tst.iloc[:,44]
+yvals_train=data_trn.iloc[:,44]
 
 yvals_train=to_categorical(np.asarray(yvals_train.factorize()[0]))
 yvals_test=to_categorical(np.asarray(yvals_test.factorize()[0]))
@@ -158,7 +179,7 @@ from sklearn.model_selection import GridSearchCV
 from itertools import repeat
 
 # Define the parameter grid for the number of nodes in the hidden layer
-param_grid = {'hidden_layer_sizes': np.arange(2, 21, 10)}
+param_grid = {'hidden_layer_sizes': np.arange(2, 21, 2)}
 
 # Create a MLPClassifier object
 mlp = MLPClassifier(max_iter=1000)
@@ -173,17 +194,18 @@ grid_search.fit(xvals_train, yvals_train)
 print("Best number of nodes in hidden layer: ", grid_search.best_params_)
 
 result=[]
-for i in [0,2,5]:
+for i in [0,20,50]:
   for j in [0,2,5]:
-    x=func_modified_test_train(i,j,grid_search.best_params_['hidden_layer_sizes'],400,100,6,[9,9,9,9],dep_cor,xvals_train,xvals_test,yvals_train,yvals_test,True)
+    x=func_modified_landsat(i,j,grid_search.best_params_['hidden_layer_sizes'],
+                               700,200,6,[11,11,11,11],dep_cor,xvals_train,yvals_train,xvals_test,
+                               yvals_test,True)
     result.append([i,j,x[0],x[1],x[2]])
-
-result_rsdata1=pd.DataFrame(result)
-result_rsdata1.columns =["Lambda","Mu", "Test Accuracy", "Number of sensors selected","Selected sensors"]
-writer = pd.ExcelWriter('output_1_rsdata1.xlsx')
-# write dataframe to excel
-result_rsdata1.to_excel(writer)
-# save the excel
-writer.save()
+    result_landsat=pd.DataFrame(result)
+    result_landsat.columns =["Lambda","Mu", "Test Accuracy", "Number of sensors selected","Selected sensors"]
+    writer = pd.ExcelWriter('output_1_landsat_new_tuning.xlsx')
+    # write dataframe to excel
+    result_landsat.to_excel(writer)
+    # save the excel
+    writer.save()
 
 
