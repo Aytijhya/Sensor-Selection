@@ -283,16 +283,21 @@ for i in [0,2,5]:
 #RSData-1
 
 #rs=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/rs_8cl.csv')
-rs=pd.read_csv('C:/Users/CILAB2/Downloads/ayti-datasets/sensor-selection-datasets/rs_8cl.csv')
+rs=pd.read_csv('C:/Users/CILAB2/Downloads/ayti-datasets/rs_8cl.csv')
 xvals = rs.iloc[:,1:8]
+from scipy.stats import zscore
+for i in range(7):
+  xvals.iloc[:,i]=zscore(xvals.iloc[:,i])
+
+
 yvals = rs.iloc[:,8]
 yvals=to_categorical(np.asarray(yvals.factorize()[0]))
 
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import GridSearchCV
-
+from itertools import repeat
 # Define the parameter grid for the number of nodes in the hidden layer
-param_grid = {'hidden_layer_sizes': np.arange(2, 21, 2)}
+param_grid = {'hidden_layer_sizes': np.arange(2, 21, 3)}
 
 # Create a MLPClassifier object
 mlp = MLPClassifier(max_iter=1000)
@@ -309,16 +314,15 @@ print("Best number of nodes in hidden layer: ", grid_search.best_params_)
 result=[]
 for i in [0,2,5]:
   for j in [0,2,5]:
-    x=func_modified(i,j,grid_search.best_params_['hidden_layer_sizes'],400,100,3,list(repeat(1,7)),dep_cor,xvals,yvals,True)
+    x=func_modified(i,j,grid_search.best_params_['hidden_layer_sizes'],400,2000,8,list(repeat(1,7)),dep_cor,xvals,yvals,True)
     result.append([i,j,x[0],x[1],x[2]])
-
-result_rsdata1=pd.DataFrame(result)
-result_rsdata1.columns =["Lambda","Mu", "Test Accuracy", "Number of sensors selected","Selected sensors"]
-writer = pd.ExcelWriter('output_1_rsdata1.xlsx')
-# write dataframe to excel
-result_rsdata1.to_excel(writer)
-# save the excel
-writer.save()
+    result_rsdata1=pd.DataFrame(result)
+    result_rsdata1.columns =["Lambda","Mu", "Test Accuracy", "Number of sensors selected","Selected sensors"]
+    writer = pd.ExcelWriter('output_1_rsdata1.xlsx')
+    # write dataframe to excel
+    result_rsdata1.to_excel(writer)
+    # save the excel
+    writer.save()
 
 
 #%%
