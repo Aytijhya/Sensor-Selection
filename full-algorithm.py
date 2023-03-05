@@ -193,6 +193,7 @@ e1=f1+np.random.normal(loc=0.0, scale=0.05, size=150)
 e2=f3+np.random.normal(loc=0.0, scale=0.05, size=150)
 e3=f4+np.random.normal(loc=0.0, scale=0.05, size=150)
 xvals=pd.concat([f1,f2,e1,f3,f4,e2,e3], axis=1, ignore_index=True).astype(np.float32)
+
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import GridSearchCV
 

@@ -33,7 +33,7 @@ def func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, ep
   import tensorflow.compat.v1 as tf
   tf.disable_v2_behavior()
   from sklearn.model_selection import train_test_split
-
+  import statistics
   #xvals_train, xvals_test,yvals_train, yvals_test = train_test_split(xvals,yvals,random_state=None, test_size=0.2,  shuffle=True)
                                                                      
   starter_learning_rate = 0.001
@@ -54,30 +54,33 @@ def func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, ep
   ## Initializing weigths and biases
   hidden_output_0 = tf.nn.relu(tf.matmul(input_X,weights_0)+bias_0)
   predicted_y = tf.sigmoid(tf.matmul(hidden_output_0,weights_1) + bias_1)
-
-  ##calculate penalty terms
   series = pd.Series(sensor_sizes)
   cumsum = series.cumsum()
-  penalty=(tf.reduce_sum(tf.square(weights_0[0:sensor_sizes[0]])))**0.5/sensor_sizes[0]
-  for i in range(len(sensor_sizes)-1):
-    penalty=penalty+((tf.reduce_sum(tf.square(weights_0[cumsum[i]:cumsum[i+1]])))**0.5)/sensor_sizes[i+1]
-
   cumsum =[0]+ list(series.cumsum())
-  redund=0
-  r_mat=np.array(xvals_train.corr())
-  rsq_mat=[[elem*elem for elem in inner] for inner in r_mat]
-  rsq_mat=pd.DataFrame(rsq_mat)
-  for i in range(len(sensor_sizes)):
-    for j in range(len(sensor_sizes)):
-      if j!=i:
-        redund=redund+dep(rsq_mat,sensor_sizes,i+1,j+1)*((tf.reduce_sum(tf.square(weights_0[cumsum[j]:cumsum[j+1]])))*(tf.reduce_sum(tf.square(weights_0[cumsum[i]:cumsum[i+1]])))**0.5)/(sensor_sizes[i]*sensor_sizes[j])
-
-  if len(sensor_sizes)>1:
-    redund=redund/(len(sensor_sizes)*(len(sensor_sizes)-1))
-
-  loss = tf.reduce_mean(tf.square(predicted_y-tf.convert_to_tensor(yvals_train, dtype=tf.float32))) + regularizer_rate_0*redund/num_layers_0**2 + regularizer_rate_1*penalty/num_layers_0 
-
-
+  if reduction==True:
+      ##calculate penalty terms
+      
+      penalty=(tf.reduce_sum(tf.square(weights_0[0:sensor_sizes[0]])))**0.5/sensor_sizes[0]
+      for i in range(len(sensor_sizes)-1):
+        penalty=penalty+((tf.reduce_sum(tf.square(weights_0[cumsum[i+1]:cumsum[i+2]])))**0.5)/sensor_sizes[i+1]
+    
+      
+      redund=0
+      r_mat=np.array(xvals_train.corr())
+      rsq_mat=[[elem*elem for elem in inner] for inner in r_mat]
+      rsq_mat=pd.DataFrame(rsq_mat)
+      for i in range(len(sensor_sizes)):
+        for j in range(len(sensor_sizes)):
+          if j!=i:
+            redund=redund+dep(rsq_mat,sensor_sizes,i+1,j+1)*((tf.reduce_sum(tf.square(weights_0[cumsum[j]:cumsum[j+1]])))*(tf.reduce_sum(tf.square(weights_0[cumsum[i]:cumsum[i+1]])))**0.5)/(sensor_sizes[i]*sensor_sizes[j])
+    
+      if len(sensor_sizes)>1:
+        redund=redund/(len(sensor_sizes)*(len(sensor_sizes)-1))
+    
+      loss = tf.reduce_mean(tf.square(predicted_y-tf.convert_to_tensor(yvals_train, dtype=tf.float32))) + regularizer_rate_0*redund/num_layers_0**2 + regularizer_rate_1*penalty/num_layers_0 
+  else: 
+      loss = tf.reduce_mean(tf.square(predicted_y-tf.convert_to_tensor(yvals_train, dtype=tf.float32)))
+      
   ## Variable learning rate
   learning_rate = tf.train.exponential_decay(starter_learning_rate, 0, 5, 0.85, staircase=True)
   ## Adam optimzer for finding the right weight
@@ -137,16 +140,13 @@ def func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, ep
     xvals_test_red=pd.concat(selected,ignore_index=True, axis=1)
     
   
-    acc=0
-    c=0
+    acc=[]
     sensor_sizes_red=[sensor_sizes[i] for i in v]
-    for i in range(10):
-     x=func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, batch_size, num_classes, sensor_sizes_red,dep_cor,xvals_train_red, yvals_train,xvals_test_red, yvals_test,reduction=False)
-     if x[0] > 0.4:
-         acc=acc+x[0]
-         c=c+1
     s.close()
-    return([acc/c,len(sensor_sizes_red),v])
+    for i in range(10):
+      x=func_modified_landsat(0,0,num_layers_0, epochs, batch_size, num_classes, sensor_sizes_red,dep_cor,xvals_train_red, yvals_train,xvals_test_red, yvals_test,reduction=False)
+      acc.append(x[0])
+    return([sum(acc)/10,statistics.stdev(acc),len(sensor_sizes_red),v])
   else:
     s.close()
     return([testacc,len(sensor_sizes)])
@@ -205,5 +205,70 @@ for i in [0,20,50]:
     result_landsat.to_excel(writer)
     # save the excel
     writer.save()
+
+#%%
+data_trn=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/Landsat_trn_modified.csv')
+data_tst=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/Landsat_tst_modified.csv')
+
+data_trn['Id']=list(range(0,len(data_trn)))
+yvals=data_trn.iloc[:,45]
+yvals=to_categorical(np.asarray(yvals.factorize()[0]))
+
+from scipy.stats import zscore
+for i in range(44):
+  data_tst.iloc[:,i+1]=zscore(data_tst.iloc[:,i+1])
+  data_trn.iloc[:,i+1]=zscore(data_trn.iloc[:,i+1])
+
+shuffled = data_trn.sample(frac=1)
+folds = np.array_split(shuffled, 10) 
+num_layers_0=np.arange(4, 21, 2)
+acc=[]
+
+from itertools import repeat
+for j in num_layers_0:
+    a=0
+    for i in range(10):
+        tst=folds.pop()
+        trn=pd.concat(folds)
+        x=func_modified_landsat(0,0,j,500,200,6,[11,11,11,11],dep_cor,
+                                trn.iloc[:,1:45],yvals[trn['Id']],
+                                tst.iloc[:,1:45],yvals[tst['Id']],
+                                reduction=False)
+        a=a+x[0]
+        folds.insert(0,tst)
+    acc.append(a/10)
+    
+nodes=num_layers_0[acc.index(max(acc))]
+
+data_trn.drop('Unnamed: 0',axis=1,inplace=True)
+data_tst.drop('Unnamed: 0',axis=1,inplace=True)
+xvals_train=data_trn.iloc[:,0:44]
+xvals_test=data_tst.iloc[:,0:44]
+yvals_test=data_tst.iloc[:,44]
+yvals_train=data_trn.iloc[:,44]
+
+yvals_train=to_categorical(np.asarray(yvals_train.factorize()[0]))
+yvals_test=to_categorical(np.asarray(yvals_test.factorize()[0]))
+
+
+
+for i in [50]:
+  for j in [ 2, 5]:
+      result = []
+      for k in range(10):
+          print(i,j,k)
+          x = func_modified_landsat(i,j,nodes,500,200,6,[11,11,11,11],dep_cor,
+                                  xvals_train,yvals_train,xvals_test,
+                                  yvals_test,
+                                  reduction=True)
+          result.append([i, j, x[0], x[1], x[2], x[3]])
+      result_ls = pd.DataFrame(result)
+      result_ls.columns = ["Lambda", "Mu", "Test Accuracy",
+                              "Sd", "Number of sensors selected", "Selected sensors"]
+      writer = pd.ExcelWriter('output_1_landsat_new_tuning_'+ str(i) + '_' + str(j)+'_10_times.xlsx')
+      # write dataframe to excel
+      result_ls.to_excel(writer)
+      # save the excel
+      writer.save()
 
 
