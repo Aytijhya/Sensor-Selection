@@ -107,8 +107,8 @@ def func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, ba
                                                                    ))
     
   
-  y_pred = np.rint(s.run(predicted_y, feed_dict={input_X: xvals_test}))
-
+  y_pred = np.array(s.run(predicted_y, feed_dict={input_X: xvals_test}))
+  y_pred= np.where(y_pred == y_pred.max(axis=1)[:, np.newaxis], 1, 0)
   testacc = accuracy_score(yvals_test, y_pred)
  
   print("\nTest Accuracy: {0:f}\n".format(testacc))
@@ -500,3 +500,9 @@ xvals = rs.iloc[:,1:8]
 yvals = rs.iloc[:,8]
 yvals=to_categorical(np.asarray(yvals.factorize()[0]))
 
+#%%
+
+import scipy.io
+
+bci=scipy.io.loadmat('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/BCICIV_1_mat/BCICIV_calib_ds1a.mat')
+ev=scipy.io.loadmat('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/BCICIV_1_mat/BCICIV_eval_ds1a.mat')

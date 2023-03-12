@@ -34,6 +34,7 @@ def func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, ep
   tf.disable_v2_behavior()
   from sklearn.model_selection import train_test_split
   import statistics
+  import matplotlib.pyplot as plt
   #xvals_train, xvals_test,yvals_train, yvals_test = train_test_split(xvals,yvals,random_state=None, test_size=0.2,  shuffle=True)
                                                                      
   starter_learning_rate = 0.001
@@ -91,7 +92,8 @@ def func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, ep
   accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
   training_accuracy = []
   training_loss = []
-
+  
+  weight=[]
   #s.run(tf.initialize_all_variables)
   s.run(tf.compat.v1.global_variables_initializer())
   for epoch in range(epochs):    
@@ -110,8 +112,20 @@ def func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, ep
                                                                     training_accuracy[epoch]
                                                                    ))
     
-  
-    
+    w0=weights_0.eval()
+    w=[]
+    #w.append(norm(w0[0:sensor_sizes[0]],2))
+    for i in range(len(sensor_sizes)):
+      w.append(norm(w0[cumsum[i]:cumsum[i+1]],2))
+    weight.append(w)
+  if reduction==True:
+      weight=pd.DataFrame(weight)
+      plt.plot(weight[0], label = "1")
+      plt.plot(weight[1], label = "2")
+      plt.plot(weight[2], label = "3")
+      plt.plot(weight[3], label = "4")
+      plt.legend()
+      plt.show()
   y_pred = np.rint(s.run(predicted_y, feed_dict={input_X: xvals_test}))
 
   testacc = accuracy_score(yvals_test, y_pred)
@@ -126,7 +140,7 @@ def func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, ep
   print(w)
   #Feature selection
   if reduction==True:
-    v=[i for i,x in enumerate(w) if x > 0.1*max(w)]
+    v=[i for i,x in enumerate(w) if x > 0.5*max(w)]
     selected=[]
     for i in v:
       selected.append(xvals_train.iloc[:,range(cumsum[i],cumsum[i+1])])
@@ -143,10 +157,10 @@ def func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, ep
     acc=[]
     sensor_sizes_red=[sensor_sizes[i] for i in v]
     s.close()
-    for i in range(10):
+    for i in range(2):
       x=func_modified_landsat(0,0,num_layers_0, epochs, batch_size, num_classes, sensor_sizes_red,dep_cor,xvals_train_red, yvals_train,xvals_test_red, yvals_test,reduction=False)
       acc.append(x[0])
-    return([sum(acc)/10,statistics.stdev(acc),len(sensor_sizes_red),v])
+    return([sum(acc)/2,statistics.stdev(acc),len(sensor_sizes_red),v])
   else:
     s.close()
     return([testacc,len(sensor_sizes)])
@@ -193,7 +207,7 @@ print("Best number of nodes in hidden layer: ", grid_search.best_params_)
 
 result=[]
 for i in [0,20,50]:
-  for j in [0,2,5]:
+  for j in [0,1,2]:
     x=func_modified_landsat(i,j,grid_search.best_params_['hidden_layer_sizes'],
                                700,200,6,[11,11,11,11],dep_cor,xvals_train,yvals_train,xvals_test,
                                yvals_test,True)
@@ -252,8 +266,8 @@ yvals_test=to_categorical(np.asarray(yvals_test.factorize()[0]))
 
 
 
-for i in [50]:
-  for j in [ 2, 5]:
+for i in [0,20,50]:
+  for j in [ 0,1,2]:
       result = []
       for k in range(10):
           print(i,j,k)

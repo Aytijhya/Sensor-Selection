@@ -33,10 +33,14 @@ def func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, ba
   tf.disable_v2_behavior()
   from sklearn.model_selection import train_test_split
   import statistics
+  from sklearn import metrics
+  import matplotlib.pyplot as plt
+  
+  xvals=data.iloc[:,0:yloc]
+  yvals=data.iloc[:,yloc]
   
   data['Id']=list(range(0,len(data)))
-  xvals=data.iloc[:,1:yloc]
-  yvals=data.iloc[:,yloc]
+  
   s=[]
   for i in range(8):
       s.append(data.loc[data.iloc[:,yloc]==i+1].sample(frac=1).iloc[0:200,])
@@ -44,13 +48,14 @@ def func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, ba
   trn_data=pd.concat(s)
   
   tst_data=data.loc[[i for i in list(data.Id) if i not in list(trn_data.Id) ]]
-  xvals_train=trn_data.iloc[:,1:yloc]
-  xvals_test=tst_data.iloc[:,1:yloc]
+  xvals_train=trn_data.iloc[:,0:yloc]
+  xvals_test=tst_data.iloc[:,0:yloc]
   yvals_train=trn_data.iloc[:,yloc]
   yvals_test=tst_data.iloc[:,yloc]
   
   yvals_train=to_categorical(np.asarray(yvals_train.factorize()[0]))
   yvals_test=to_categorical(np.asarray(yvals_test.factorize()[0]))
+  
   starter_learning_rate = 0.001
   num_features=sum(sensor_sizes)
   nrow=len(yvals_train)
@@ -73,13 +78,14 @@ def func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, ba
   cumsum = series.cumsum()
   cumsum =[0]+ list(series.cumsum())
   ##calculate penalty terms
-  if(reduction== True):
-      
+  if(regularizer_rate_1!=0):
       penalty=(tf.reduce_sum(tf.square(weights_0[0:sensor_sizes[0]])))**0.5/sensor_sizes[0]
       for i in range(len(sensor_sizes)-1):
         penalty=penalty+((tf.reduce_sum(tf.square(weights_0[cumsum[i+1]:cumsum[i+2]])))**0.5)/sensor_sizes[i+1]
-    
-      redund=0
+  else:
+       penalty=0
+  redund=0
+  if(regularizer_rate_0!=0):   
       r_mat=np.array(xvals_train.corr())
       rsq_mat=[[elem*elem for elem in inner] for inner in r_mat]
       rsq_mat=pd.DataFrame(rsq_mat)
@@ -91,20 +97,19 @@ def func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, ba
       if len(sensor_sizes)>1:
         redund=redund/(len(sensor_sizes)*(len(sensor_sizes)-1))
     
-      loss = tf.reduce_mean(tf.square(predicted_y-tf.convert_to_tensor(yvals_train, dtype=tf.float32))) + regularizer_rate_0*redund/num_layers_0**2 + regularizer_rate_1*penalty/num_layers_0 
-  else: 
-      loss = tf.reduce_mean(tf.square(predicted_y-tf.convert_to_tensor(yvals_train, dtype=tf.float32))) 
+  loss = tf.reduce_mean(tf.square(predicted_y-tf.convert_to_tensor(yvals_train, dtype=tf.float32))) + regularizer_rate_0*redund/num_layers_0**2 + regularizer_rate_1*penalty/num_layers_0 
   ## Variable learning rate
   learning_rate = tf.train.exponential_decay(starter_learning_rate, 0, 5, 0.85, staircase=True)
   ## Adam optimzer for finding the right weight
-  optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss,var_list=[weights_0,weights_1,
+  optimizer = tf.train.GradientDescentOptimizer(0.5).minimize(loss,var_list=[weights_0,weights_1,
                                                                          bias_0,bias_1])    
   ## Metrics definition
   correct_prediction = tf.equal(tf.argmax(yvals_train,1), tf.argmax(predicted_y,1))
   accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
   training_accuracy = []
   training_loss = []
-
+  r=[]
+  p=[]
   #s.run(tf.initialize_all_variables)
   s.run(tf.compat.v1.global_variables_initializer())
   for epoch in range(epochs):    
@@ -118,17 +123,42 @@ def func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, ba
                                                          input_y: yvals_train}))
     training_loss.append(s.run(loss, {input_X: xvals_train, 
                                       input_y: yvals_train}))
-  print("Epoch:{0}, Train loss: {1:.2f} Train acc: {2:.3f}".format(epoch,
+    if(regularizer_rate_0!=0):
+        r.append(s.run(redund, {input_X: xvals_train, 
+                                      input_y: yvals_train}))
+    if(regularizer_rate_1!=0):
+        p.append(s.run(penalty, {input_X: xvals_train, 
+                                      input_y: yvals_train}))
+    print("T:{0}, Trn loss: {1:.2f}, Trn acc: {2:.3f}".format(epoch,
                                                                     training_loss[epoch],
                                                                     training_accuracy[epoch]
                                                                    ))
-    
+  plt.plot(training_loss, label = "training_loss")
+  if(regularizer_rate_0!=0):
+      plt.plot(r, label = "Redundancy")
+  if(regularizer_rate_1!=0):
+      plt.plot(p, label = "GroupLasso")
+  plt.legend()
+  plt.show()
   
-  y_pred = np.rint(s.run(predicted_y, feed_dict={input_X: xvals_test}))
-
+  y_pred = np.array(s.run(predicted_y, feed_dict={input_X: xvals_train}))
+  y_pred= np.where(y_pred == y_pred.max(axis=1)[:, np.newaxis], 1, 0)
+  trainacc = accuracy_score(yvals_train, y_pred)
+  yvals_train=[np.argmax(x) for x in yvals_train]
+  y_pred=[np.argmax(x) for x in y_pred]
+  cm = metrics.confusion_matrix( yvals_train,y_pred)
+  print(cm)
+  
+  y_pred = np.array(s.run(predicted_y, feed_dict={input_X: xvals_test}))
+  y_pred= np.where(y_pred == y_pred.max(axis=1)[:, np.newaxis], 1, 0)
   testacc = accuracy_score(yvals_test, y_pred)
- 
+  yvals_test=[np.argmax(x) for x in yvals_test]
+  y_pred=[np.argmax(x) for x in y_pred]
+  cm_test = metrics.confusion_matrix(yvals_test, y_pred)
+  print(cm_test)
+  
   print("\nTest Accuracy: {0:f}\n".format(testacc))
+  print("\nTrain Accuracy: {0:f}\n".format(trainacc))
 
   w0=weights_0.eval()
   w=[]
@@ -145,19 +175,19 @@ def func_modified(regularizer_rate_0,regularizer_rate_1,num_layers_0, epochs, ba
       selected.append(xvals.iloc[:,range(cumsum[i],cumsum[i+1])])
     selected.append(yvals)
     data_reduced=pd.concat(selected,ignore_index=True, axis=1)
-    
+    data_reduced['Id']=list(range(0,len(data_reduced)))
+    print(data_reduced.head())
     acc=[]
     sensor_sizes_red=[sensor_sizes[i] for i in v]
     s.close()
     for i in range(10):
-     
-     x=func_modified(0,0,num_layers_0, epochs, batch_size, num_classes, sensor_sizes_red,dep_cor,data_reduced,len(data_reduced.axes[1]),reduction=False)
+     x=func_modified(0,0,num_layers_0, epochs, batch_size, num_classes, sensor_sizes_red,dep_cor,data_reduced,len(data_reduced.axes[1])-2,reduction=False)
      acc.append(x[0])
     
-    return([sum(acc)/10,statistics.stdev(acc),len(sensor_sizes_red),v])
+    return([sum(acc)/10,statistics.stdev(acc),len(sensor_sizes_red),v,cm])
   else:
     s.close()
-    return([testacc,len(sensor_sizes)])
+    return([testacc,len(sensor_sizes),cm])
 
 
 
@@ -280,10 +310,11 @@ def func_modified_landsat(regularizer_rate_0,regularizer_rate_1,num_layers_0, ep
 #%%
 rs=pd.read_csv('/Users/aytijhyasaha/Documents/datasets/sensor-selection-datasets/rs_8cl.csv')
 #rs=pd.read_csv('C:/Users/CILAB2/Downloads/ayti-datasets/sensor-selection-datasets/rs_8cl.csv')
-
+rs.drop('Unnamed: 0',axis=1,inplace=True)
 from scipy.stats import zscore
 for i in range(7):
-  rs.iloc[:,i+1]=zscore(rs.iloc[:,i+1])
+  rs.iloc[:,i]=zscore(rs.iloc[:,i])
+rs['Id']=list(range(0,len(rs)))
 
 s=[]
 for i in range(8):
@@ -299,6 +330,7 @@ num_layers_0=np.arange(4, 21, 2)
 acc=[]
 
 from itertools import repeat
+
 for j in num_layers_0:
     a=0
     for i in range(10):
@@ -319,10 +351,11 @@ for i in [0,20,50]:
       result = []
       for k in range(10):
           print(i,j,k)
-          x = func_modified(i,j,nodes, 500,200,8,list(repeat(1,7)),dep_cor,rs,8,
+          x = func_modified(i,j,nodes, 500,200,8,list(repeat(1,7)),dep_cor,rs,7,
                                   reduction=True)
           result.append([i, j, x[0], x[1], x[2], x[3]])
       result_lrs = pd.DataFrame(result)
+      
       result_lrs.columns = ["Lambda", "Mu", "Test Accuracy",
                               "Sd", "Number of sensors selected", "Selected sensors"]
       writer = pd.ExcelWriter('output_1_lrs_new_tuning_'+ str(i) + '_' + str(j)+'_10_times.xlsx')
@@ -330,3 +363,5 @@ for i in [0,20,50]:
       result_lrs.to_excel(writer)
       # save the excel
       writer.save()
+
+#%%
